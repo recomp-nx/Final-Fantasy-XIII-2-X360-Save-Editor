@@ -42,6 +42,8 @@ public sealed class Xbox360Layout
     public byte[] Header { get; private init; } = Array.Empty<byte>();
     public uint[] OriginalBagHeaders { get; private init; } = Array.Empty<uint>();
     public int DataLength { get; private init; }
+    // True when the file on disk was encrypted; saving then encrypts again (Xbox360Crypto).
+    public bool Encrypted { get; private init; }
 
     private static readonly byte[] Marker = Encoding.ASCII.GetBytes("db_partyman");
 
@@ -57,7 +59,8 @@ public sealed class Xbox360Layout
     private static int BagBlockLengthX() => SaveCore.InventoryBags.Sum(b => 4 + b.Capacity * X360SlotSize);
     private static int BagBlockLengthPs3() => SaveCore.InventoryBags.Sum(b => 4 + b.Capacity * Ps3SlotSize);
 
-    public static (byte[] Ps3, Xbox360Layout Layout) ToPs3(byte[] file)
+    // file: decrypted Xbox 360 APP.DAT (header + data). encrypted: whether the copy on disk was encrypted.
+    public static (byte[] Ps3, Xbox360Layout Layout) ToPs3(byte[] file, bool encrypted = false)
     {
         if (!LooksLikeXbox360(file)) throw new InvalidDataException("This is not a recognised decrypted Xbox 360 APP.DAT.");
         byte[] x = file.AsSpan(HeaderSize).ToArray();
@@ -89,7 +92,7 @@ public sealed class Xbox360Layout
         x.AsSpan(bagsEndX, AccessoryManagerX - bagsEndX).CopyTo(p.AsSpan(bagsEndP));
         x.AsSpan(AccessoryManagerX).CopyTo(p.AsSpan(SaveCore.AccessoryManagerBase));
 
-        var layout = new Xbox360Layout { Header = file.AsSpan(0, HeaderSize).ToArray(), OriginalBagHeaders = headers, DataLength = x.Length };
+        var layout = new Xbox360Layout { Header = file.AsSpan(0, HeaderSize).ToArray(), OriginalBagHeaders = headers, DataLength = x.Length, Encrypted = encrypted };
         p = SaveCore.RepairChecksum(p);
         if (!layout.FromPs3(p).AsSpan().SequenceEqual(file))
             throw new InvalidDataException("Xbox 360 layout conversion did not round-trip exactly; refusing to open this file.");
@@ -127,6 +130,9 @@ public sealed class Xbox360Layout
         p.AsSpan(SaveCore.AccessoryManagerBase, DataLength - AccessoryManagerX).CopyTo(x.AsSpan(AccessoryManagerX));
         return Header.Concat(x).ToArray();
     }
+
+    // Bytes to write to disk: decrypted Xbox 360 file, encrypted again if the original was encrypted.
+    public byte[] ToFile(byte[] ps3) => Encrypted ? Xbox360Crypto.EncryptFile(FromPs3(ps3)) : FromPs3(ps3);
 
     // Revert any change inside the unverified range. Returns true if something was reverted.
     public static bool RevertLockedRange(byte[] edited, byte[] baseline)

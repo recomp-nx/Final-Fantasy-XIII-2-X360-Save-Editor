@@ -1632,9 +1632,12 @@ public static class SaveCore
         {
             // No KEY.DAT: assume APP.DAT was already decrypted by an external tool. It is edited and
             // saved back decrypted; re-encrypting/resigning is left to that external tool.
-            if (!LooksPlain(app) && Xbox360Layout.LooksLikeXbox360(app))
+            byte[]? x360Decrypted = LooksPlain(app) ? null : Xbox360Crypto.TryDecryptFile(app);
+            byte[] x360 = x360Decrypted ?? app;
+            if (!LooksPlain(x360) && Xbox360Layout.LooksLikeXbox360(x360))
             {
-                var (ps3, layout) = Xbox360Layout.ToPs3(app);
+                bool encrypted = x360Decrypted is not null;
+                var (ps3, layout) = Xbox360Layout.ToPs3(x360, encrypted);
                 return new SaveLoadResult
                 {
                     Folder = folder,
@@ -1642,7 +1645,9 @@ public static class SaveCore
                     WorkingKey = 0,
                     PlainOnly = true,
                     Xbox360 = layout,
-                    Mode = "Decrypted Xbox 360 APP.DAT | changes are saved in Xbox 360 format",
+                    Mode = encrypted
+                        ? "Encrypted Xbox 360 APP.DAT | decrypted on load, encrypted again on save"
+                        : "Decrypted Xbox 360 APP.DAT | changes are saved decrypted in Xbox 360 format",
                     TitleId = title,
                     PfdProtected = false,
                     PfdMetadataReliable = true,

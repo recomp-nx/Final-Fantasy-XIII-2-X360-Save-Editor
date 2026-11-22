@@ -259,7 +259,9 @@ public partial class MainWindow : Window
             RefreshSelectedTab();
             Status($"Save loaded successfully. {result.Mode}");
             if (result.Xbox360 is not null)
-                Warn("This is a decrypted Xbox 360 save. It was converted to the editor's internal layout and will be saved back in Xbox 360 format.\n\n" +
+                Warn((result.Xbox360.Encrypted
+                        ? "This is an encrypted Xbox 360 save. It was decrypted and converted to the editor's internal layout, and will be saved back in Xbox 360 format, encrypted again.\n\n"
+                        : "This is a decrypted Xbox 360 save. It was converted to the editor's internal layout and will be saved back in Xbox 360 format.\n\n") +
                      "Characters, inventory, equipment, monsters and Gil are mapped. Casino coins, chocobo racing RP, poker/Chronobind stats and Fragment Skills " +
                      "are not verified for Xbox 360 yet, so changes to them are blocked. Keep a backup of the original file.");
             else if (result.PlainOnly && support != RegionSupport.Tested)
@@ -383,7 +385,7 @@ private void SetLoading(bool loading)
         RegionText.Text = region;
         ChecksumText.Text = SaveCore.StoredChecksum(_plain) == SaveCore.CalculateChecksum(_plain) ? "Valid" : "Invalid - repair on edit";
         AccessText.Text = _writeAllowed
-            ? _session.Xbox360 is not null ? "Writable / Xbox 360 (converted)" : _session.PlainOnly ? "Writable / decrypted (no KEY.DAT)" : (AppIsPfdProtected ? "Writable / export + resign required" : "Writable / tested")
+            ? _session.Xbox360 is not null ? (_session.Xbox360.Encrypted ? "Writable / Xbox 360 encrypted" : "Writable / Xbox 360 decrypted") : _session.PlainOnly ? "Writable / decrypted (no KEY.DAT)" : (AppIsPfdProtected ? "Writable / export + resign required" : "Writable / tested")
             : (_session.PfdMetadataReliable ? "Read-only safety mode" : "Read-only / PFD unreadable");
         LoadedText.Text = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
     }
@@ -395,7 +397,7 @@ private void SetLoading(bool loading)
         SaveEncryptedButton.IsEnabled = loaded && _writeAllowed && !_loading;
         SaveInPlaceButton.IsEnabled = loaded && _writeAllowed && !_loading && !AppIsPfdProtected;
         SaveInPlaceButton.Content = AppIsPfdProtected ? "In-Place Disabled (PFD)" : "Save In Place + Backup";
-        SaveEncryptedButton.Content = _session?.PlainOnly == true ? "Decrypted Copy" : "Encrypted Copy";
+        SaveEncryptedButton.Content = _session?.PlainOnly == true && _session.Xbox360?.Encrypted != true ? "Decrypted Copy" : "Encrypted Copy";
         bool chocoboEditable = loaded && _writeAllowed && !_loading
             && _selectedMonster is not null
             && SaveCore.IsChocoboMonster(_selectedMonster.Id, _selectedMonster.Name);
@@ -3308,7 +3310,7 @@ private void SetLoading(bool loading)
         {
             string dir = EditorOutputDir("Exports");
             string path = Path.Combine(dir, $"APP_DECRYPTED_{Stamp()}.DAT");
-            File.WriteAllBytes(path, _session?.Xbox360 is not null ? EncryptedBytes() : SaveCore.RepairChecksum(Plain));
+            File.WriteAllBytes(path, _session?.Xbox360 is not null ? _session.Xbox360.FromPs3(SaveCore.RepairChecksum(Plain)) : SaveCore.RepairChecksum(Plain));
             Info("Created decrypted backup:\n" + path, "Decrypted backup");
             Status("Decrypted APP.DAT backup exported.");
         }
@@ -3326,7 +3328,7 @@ private void SetLoading(bool loading)
             string path = Path.Combine(dir, $"APP_EDITED_{Stamp()}.DAT");
             WriteFlushed(path, encrypted);
             VerifyOutputFile(path);
-            string kind = _session.PlainOnly ? "Decrypted" : "Encrypted";
+            string kind = _session.PlainOnly && _session.Xbox360?.Encrypted != true ? "Decrypted" : "Encrypted";
             Info("Created and verified:\n" + path, kind + " copy saved");
             Status(kind + " edited copy saved and verified.");
         }
@@ -3391,7 +3393,11 @@ private void SetLoading(bool loading)
         if (!_session.PlainOnly) { SaveCore.VerifyEncryptedRoundtrip(output, _session.WorkingKey, Plain); return; }
         if (_session.Xbox360 is not null)
         {
-            if (!output.AsSpan().SequenceEqual(_session.Xbox360.FromPs3(SaveCore.RepairChecksum(Plain))))
+            byte[] expectedDecrypted = _session.Xbox360.FromPs3(SaveCore.RepairChecksum(Plain));
+            byte[] actualDecrypted = _session.Xbox360.Encrypted
+                ? Xbox360Crypto.TryDecryptFile(output) ?? throw new InvalidDataException("Encrypted Xbox 360 output did not decrypt back")
+                : output;
+            if (!actualDecrypted.AsSpan().SequenceEqual(expectedDecrypted))
                 throw new InvalidDataException("Verification mismatch in Xbox 360 output");
             return;
         }
@@ -3407,7 +3413,7 @@ private void SetLoading(bool loading)
     {
         if (_session is not null && _session.PlainOnly)
             return _session.Xbox360 is not null
-                ? _session.Xbox360.FromPs3(SaveCore.RepairChecksum(Plain))
+                ? _session.Xbox360.ToFile(SaveCore.RepairChecksum(Plain))
                 : SaveCore.RepairChecksum(Plain);
         if (_session is null || _session.WorkingKey == 0) throw new InvalidOperationException("No trustworthy FFXIII-2 encryption key is loaded");
         return SaveCore.EncryptBytes(SaveCore.RepairChecksum(Plain), _session.WorkingKey);
