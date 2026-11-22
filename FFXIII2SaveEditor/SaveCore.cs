@@ -1627,6 +1627,45 @@ public static class SaveCore
         if (app.Length % 8 != 0) throw new InvalidDataException("APP.DAT size must be multiple of 8");
 
         string title = DetectTitleId(folder);
+
+        if (!File.Exists(keyPath))
+        {
+            // No KEY.DAT: assume APP.DAT was already decrypted by an external tool. It is edited and
+            // saved back decrypted; re-encrypting/resigning is left to that external tool.
+            if (!LooksPlain(app) && Xbox360Layout.LooksLikeXbox360(app))
+            {
+                var (ps3, layout) = Xbox360Layout.ToPs3(app);
+                return new SaveLoadResult
+                {
+                    Folder = folder,
+                    Plain = ps3,
+                    WorkingKey = 0,
+                    PlainOnly = true,
+                    Xbox360 = layout,
+                    Mode = "Decrypted Xbox 360 APP.DAT | changes are saved in Xbox 360 format",
+                    TitleId = title,
+                    PfdProtected = false,
+                    PfdMetadataReliable = true,
+                    PfdNames = new List<string>(),
+                    FragmentCount = -1,
+                };
+            }
+            if (!LooksPlain(app))
+                throw new InvalidDataException("KEY.DAT is missing and APP.DAT does not look decrypted. Decrypt APP.DAT first, or add the save's KEY.DAT to the folder.");
+            return new SaveLoadResult
+            {
+                Folder = folder,
+                Plain = (byte[])app.Clone(),
+                WorkingKey = 0,
+                PlainOnly = true,
+                Mode = "Decrypted APP.DAT (no KEY.DAT) | changes are saved decrypted",
+                TitleId = title,
+                PfdProtected = false,
+                PfdMetadataReliable = true,
+                PfdNames = new List<string>(),
+                FragmentCount = ReadSfoFragmentCount(folder),
+            };
+        }
         string pfdPath = Path.Combine(folder, "PARAM.PFD");
         bool pfdExists = File.Exists(pfdPath);
         bool pfdMetadataReliable = !pfdExists;
@@ -1986,12 +2025,12 @@ public static class SaveCore
 
         List<string> matches = FindSaveFolders(path, 2).Take(9).ToList();
         if (matches.Count == 1) return matches[0];
-        if (matches.Count > 1) throw new InvalidDataException("Multiple PS3 save folders were found. Select the Final Fantasy XIII-2 save folder directly.");
-        throw new InvalidDataException($"APP.DAT and KEY.DAT were not found together in {path}");
+        if (matches.Count > 1) throw new InvalidDataException("Multiple save folders were found. Select the Final Fantasy XIII-2 save folder directly.");
+        throw new InvalidDataException($"APP.DAT was not found in {path}");
     }
 
     public static bool IsSaveFolder(string folder)
-        => Directory.Exists(folder) && File.Exists(Path.Combine(folder, "APP.DAT")) && File.Exists(Path.Combine(folder, "KEY.DAT"));
+        => Directory.Exists(folder) && File.Exists(Path.Combine(folder, "APP.DAT"));
 
     public static IEnumerable<string> FindSaveFolders(string root, int maxDepth)
     {

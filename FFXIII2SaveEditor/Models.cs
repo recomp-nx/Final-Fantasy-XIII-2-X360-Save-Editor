@@ -81,6 +81,10 @@ public sealed class SaveLoadResult
     public string Folder { get; init; } = "";
     public byte[] Plain { get; init; } = Array.Empty<byte>();
     public ulong WorkingKey { get; init; }
+    // True when the folder has no KEY.DAT: APP.DAT is treated as already decrypted and saved back decrypted.
+    public bool PlainOnly { get; init; }
+    // Set when APP.DAT is a decrypted Xbox 360 save that was converted to the PS3 layout in memory.
+    public Xbox360Layout? Xbox360 { get; init; }
     public string Mode { get; init; } = "";
     public string TitleId { get; init; } = "";
     public bool PfdProtected { get; init; }

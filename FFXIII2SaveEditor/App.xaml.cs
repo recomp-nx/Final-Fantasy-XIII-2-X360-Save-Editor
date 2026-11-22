@@ -131,7 +131,7 @@ public partial class App : Application
     private static string BuildCrashText(string heading, Exception ex)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("FFXIII-2 PS3 Save Editor v1.9.33");
+        sb.AppendLine("FFXIII-2 X360 Save Editor v1.9.33");
         sb.AppendLine(heading);
         sb.AppendLine($"Time: {DateTime.Now:O}");
         sb.AppendLine($"Base directory: {AppContext.BaseDirectory}");
