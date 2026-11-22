@@ -131,6 +131,16 @@ public sealed class Xbox360Layout
         return Header.Concat(x).ToArray();
     }
 
+    // The 0x110-byte header holds the slot summary the game shows in its load menu, e.g.
+    // "Godzin gry: 005:23:46\nFragmentów: 011/160". The label is localised, so only "NNN/160" is matched.
+    public static int ReadHeaderFragmentCount(byte[] file)
+    {
+        if (file.Length < HeaderSize) return -1;
+        string text = Encoding.Latin1.GetString(file, 0, HeaderSize);
+        var m = System.Text.RegularExpressions.Regex.Match(text, @"(\d{1,3})/" + SaveCore.FragmentCount + @"(?!\d)");
+        return m.Success && int.TryParse(m.Groups[1].Value, out int n) && n <= SaveCore.FragmentCount ? n : -1;
+    }
+
     // Bytes to write to disk: decrypted Xbox 360 file, encrypted again if the original was encrypted.
     public byte[] ToFile(byte[] ps3) => Encrypted ? Xbox360Crypto.EncryptFile(FromPs3(ps3)) : FromPs3(ps3);
 

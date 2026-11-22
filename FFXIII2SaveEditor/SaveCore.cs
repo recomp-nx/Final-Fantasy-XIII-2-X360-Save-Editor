@@ -1652,7 +1652,7 @@ public static class SaveCore
                     PfdProtected = false,
                     PfdMetadataReliable = true,
                     PfdNames = new List<string>(),
-                    FragmentCount = -1,
+                    FragmentCount = Xbox360Layout.ReadHeaderFragmentCount(x360),
                 };
             }
             if (!LooksPlain(app))
