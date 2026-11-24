@@ -262,7 +262,7 @@ public partial class MainWindow : Window
                 Warn((result.Xbox360.Encrypted
                         ? "This is an encrypted Xbox 360 save. It was decrypted and converted to the editor's internal layout, and will be saved back in Xbox 360 format, encrypted again.\n\n"
                         : "This is a decrypted Xbox 360 save. It was converted to the editor's internal layout and will be saved back in Xbox 360 format.\n\n") +
-                     "Characters, inventory, equipment, monsters and Gil are mapped. Casino coins, chocobo racing RP, poker/Chronobind stats and Fragment Skills " +
+                     "Characters, inventory, equipment, monsters, Gil and casino coins are mapped. Chocobo racing RP, poker/Chronobind stats and Fragment Skills " +
                      "are not verified for Xbox 360 yet, so changes to them are blocked. Keep a backup of the original file.");
             else if (result.PlainOnly && support != RegionSupport.Tested)
                 Warn("No KEY.DAT was found, so APP.DAT is being edited as an already-decrypted file. " +
@@ -430,7 +430,7 @@ private void SetLoading(bool loading)
             _plain = SaveCore.RepairChecksum(Plain);
             UpdateSaveInfo();
             RefreshSelectedTab();
-            Warn("That change affects casino coins, chocobo racing RP, poker/Chronobind stats or Fragment Skills, whose position in Xbox 360 saves is not verified yet. " +
+            Warn("That change affects chocobo racing RP, poker/Chronobind stats or Fragment Skills, whose position in Xbox 360 saves is not verified yet. " +
                  "Those values were left unchanged; any other part of the change was kept.");
             _dirty = true;
             return;

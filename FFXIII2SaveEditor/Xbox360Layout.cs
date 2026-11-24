@@ -14,7 +14,9 @@ namespace FFXIII2SaveEditor;
 //   * 0x20 bytes are missing somewhere between Gil (0x2316) and the character table (0x2B000+).
 //     Gil reads correctly unshifted; Serah/Noel/Mog read correctly at PS3 offset - 0x20.
 //     The exact location of the gap is unknown, so every PS3 offset in LockedStart..LockedEnd
-//     (casino coins, chocobo RP, poker/Chronobind stats, Fragment Skills) is unverified and locked.
+//     (chocobo RP, poker/Chronobind stats, Fragment Skills) is unverified and locked, except the
+//     fields listed in VerifiedInLockedRange.
+//     Casino coins (0x10CBA) were verified unshifted on a real Xbox 360 save holding 100 coins.
 //   * Each inventory bag is 4 + capacity * 24 bytes instead of 4 + capacity * 32 (18-byte
 //     records followed by zero padding). The 4-byte bag header holds a different value than on
 //     PS3, so it is replaced by the logical count on load and restored unchanged on save.
@@ -38,6 +40,12 @@ public sealed class Xbox360Layout
     // PS3-layout range whose Xbox 360 position is not verified. Edits here are reverted.
     public const int LockedStart = 0x2400;
     public const int LockedEnd = CharacterGapAt;
+
+    // Fields inside the locked range whose Xbox 360 position has been confirmed on a real save.
+    private static readonly (int Offset, int Length)[] VerifiedInLockedRange =
+    {
+        (SaveCore.CasinoCoinsOffset, 4), // BE32, confirmed with 100 coins in game
+    };
 
     public byte[] Header { get; private init; } = Array.Empty<byte>();
     public uint[] OriginalBagHeaders { get; private init; } = Array.Empty<uint>();
@@ -148,8 +156,21 @@ public sealed class Xbox360Layout
     public static bool RevertLockedRange(byte[] edited, byte[] baseline)
     {
         if (edited.Length != baseline.Length) return false;
-        var span = edited.AsSpan(LockedStart, LockedEnd - LockedStart);
-        var original = baseline.AsSpan(LockedStart, LockedEnd - LockedStart);
+        bool reverted = false;
+        int start = LockedStart;
+        foreach (var (offset, length) in VerifiedInLockedRange.OrderBy(v => v.Offset).Append((LockedEnd, 0)))
+        {
+            reverted |= RevertSpan(edited, baseline, start, offset - start);
+            start = offset + length;
+        }
+        return reverted;
+    }
+
+    private static bool RevertSpan(byte[] edited, byte[] baseline, int offset, int length)
+    {
+        if (length <= 0) return false;
+        var span = edited.AsSpan(offset, length);
+        var original = baseline.AsSpan(offset, length);
         if (span.SequenceEqual(original)) return false;
         original.CopyTo(span);
         return true;
